@@ -70,33 +70,37 @@ class MyPortfolio:
         """
         TODO: Complete Task 4 Below
         """
-        for i in range(self.lookback + 1, len(self.price)):
-            # Returns over the past lookback window
-            window_ret = self.returns[assets].iloc[i - self.lookback : i]
+        # Assets excluding SPY
+        assets = self.price.columns[self.price.columns != self.exclude]
 
-            # Compute momentum using cumulative returns ((1+r) product − 1)
-            cum_ret = (1.0 + window_ret).prod() - 1.0
+        # Initialize the portfolio weights DataFrame
+        self.portfolio_weights = pd.DataFrame(
+            index=self.price.index, columns=self.price.columns
+        )
 
-            # Select the top assets based on momentum
-            top_k = 4  # This keeps the portfolio reasonably aggressive without being overly concentrated
-            # Use fillna(0) to avoid issues when all values are identical or NaN
-            cum_ret = cum_ret.fillna(0)
+        # Compute per-asset Sharpe ratio over the whole period given by `price`
+        asset_ret = self.returns[assets]
 
-            if cum_ret.max() > 0:
-                # If there are assets with positive momentum, choose the top k
-                top_assets = cum_ret.sort_values(ascending=False).head(top_k).index
-                weights_series = pd.Series(0.0, index=assets)
-                weights_series[top_assets] = 1.0 / len(top_assets)
-            else:
-                # If overall momentum is negative, switch to a risk-parity defensive allocation
-                vol = window_ret.std().replace(0, 1e-8)
-                inv_vol = 1.0 / vol
-                weights_series = inv_vol / inv_vol.sum()
+        mean_ret = asset_ret.mean()
+        std_ret = asset_ret.std().replace(0, np.nan)  # avoid division by zero
+        sharpe = mean_ret / std_ret
 
-            # Record the weights for this day
-            self.portfolio_weights.loc[self.price.index[i], assets] = (
-                weights_series.values
-            )
+        # Drop NaNs in case some assets have zero volatility
+        sharpe = sharpe.dropna()
+
+        if len(sharpe) == 0:
+            # Fallback: equally weight all assets if something goes wrong
+            weights = pd.Series(1.0 / len(assets), index=assets)
+        else:
+            # Choose the asset with the highest Sharpe ratio
+            best_asset = sharpe.idxmax()
+            weights = pd.Series(0.0, index=assets)
+            weights[best_asset] = 1.0
+
+        # Use the same weights for the entire period
+        for col in assets:
+            self.portfolio_weights[col] = weights[col]
+        # The excluded asset (SPY) remains NaN here and will be filled with 0 later
         
         """
         TODO: Complete Task 4 Above
