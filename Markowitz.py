@@ -62,10 +62,17 @@ class EqualWeightPortfolio:
         """
         TODO: Complete Task 1 Below
         """
+        # Assign equal weights to all assets except SPY
+        n_assets = len(assets)
+        equal_w = 1.0 / n_assets
 
+        # Use the same weights for the entire time period
+        self.portfolio_weights[assets] = equal_w
+        # Leave the excluded asset (SPY) as NaN, which will later be filled as 0
         """
         TODO: Complete Task 1 Above
         """
+
         self.portfolio_weights.ffill(inplace=True)
         self.portfolio_weights.fillna(0, inplace=True)
 
@@ -113,8 +120,23 @@ class RiskParityPortfolio:
         """
         TODO: Complete Task 2 Below
         """
+        # At each time t, compute inverse-volatility weights based on the most recent lookback window
+        
+        for i in range(self.lookback + 1, len(df)):
+            # Returns over the past lookback window
+            window = df_returns[assets].iloc[i - self.lookback : i]
 
+            # Standard deviation (volatility) of each asset
+            vol = window.std()
 
+            # Add a very small value to avoid division by zero
+            vol = vol.replace(0, 1e-8)
+            
+            inv_vol = 1.0 / vol
+            weights = inv_vol / inv_vol.sum()
+
+            # Record the weights for this day
+            self.portfolio_weights.loc[df.index[i], assets] = weights.values
 
         """
         TODO: Complete Task 2 Above
@@ -190,9 +212,17 @@ class MeanVariancePortfolio:
 
                 # Sample Code: Initialize Decision w and the Objective
                 # NOTE: You can modify the following code
-                w = model.addMVar(n, name="w", ub=1)
-                model.setObjective(w.sum(), gp.GRB.MAXIMIZE)
+                # Decision variables w (asset weights: 0 ≤ w_i ≤ 1)
+                w = model.addMVar(n, lb=0.0, ub=1.0, name="w")
 
+                # Objective function: max w^T μ − (γ/2) * w^T Σ w
+                # w @ mu is linear; w @ Sigma @ w represents the quadratic term (QuadExpr)
+                quad_term = w @ Sigma @ w
+                obj = w @ mu - (gamma / 2.0) * quad_term
+                model.setObjective(obj, gp.GRB.MAXIMIZE)
+
+                # Constraint: ∑ w_i = 1 (budget constraint, no leverage)
+                model.addConstr(w.sum() == 1.0, name="budget")
                 """
                 TODO: Complete Task 3 Above
                 """
