@@ -70,7 +70,33 @@ class MyPortfolio:
         """
         TODO: Complete Task 4 Below
         """
-        
+        for i in range(self.lookback + 1, len(self.price)):
+            # Returns over the past lookback window
+            window_ret = self.returns[assets].iloc[i - self.lookback : i]
+
+            # Compute momentum using cumulative returns ((1+r) product − 1)
+            cum_ret = (1.0 + window_ret).prod() - 1.0
+
+            # Select the top assets based on momentum
+            top_k = 4  # This keeps the portfolio reasonably aggressive without being overly concentrated
+            # Use fillna(0) to avoid issues when all values are identical or NaN
+            cum_ret = cum_ret.fillna(0)
+
+            if cum_ret.max() > 0:
+                # If there are assets with positive momentum, choose the top k
+                top_assets = cum_ret.sort_values(ascending=False).head(top_k).index
+                weights_series = pd.Series(0.0, index=assets)
+                weights_series[top_assets] = 1.0 / len(top_assets)
+            else:
+                # If overall momentum is negative, switch to a risk-parity defensive allocation
+                vol = window_ret.std().replace(0, 1e-8)
+                inv_vol = 1.0 / vol
+                weights_series = inv_vol / inv_vol.sum()
+
+            # Record the weights for this day
+            self.portfolio_weights.loc[self.price.index[i], assets] = (
+                weights_series.values
+            )
         
         """
         TODO: Complete Task 4 Above
